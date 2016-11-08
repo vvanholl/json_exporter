@@ -1,0 +1,14 @@
+httpworkers: 2
+
+rules:
+  mapping:
+    - path: ["json", "networkAdRequest"]
+      labels: ["network"]
+
+common:
+  interval: 10
+  labels:
+    dc: "TMK"
+
+endpoints:
+  - url: "http://smart25e/api/metrics"
