@@ -8,20 +8,23 @@ import (
 )
 
 type Exporter struct {
-	HTTPWorkers   int
+	namespace string
 	endpoints     []*EndPoint
-	totalScrapes  prometheus.Counter
-	mutex         sync.RWMutex
+	httpworkers   int
 	metricfactory *MetricFactory
+	metrics       map[string]interface{}
+	totascrapes   prometheus.Counter
+	mutex         sync.RWMutex
 }
 
 func NewExporter(config *Config) *Exporter {
 	result := Exporter{}
 
-	result.HTTPWorkers = config.HTTPWorkers
+	result.namespace = config.NameSpace
+	result.httpworkers = config.HTTPWorkers
 
-	result.totalScrapes = prometheus.NewCounter(prometheus.CounterOpts{
-		Namespace: namespace,
+	result.totascrapes = prometheus.NewCounter(prometheus.CounterOpts{
+		Namespace: result.namespace,
 		Name:      "exporter_total_scrapes",
 		Help:      "Current total JSON scrapes.",
 	})
@@ -34,6 +37,8 @@ func NewExporter(config *Config) *Exporter {
 
 	result.metricfactory = NewMetricFactory(config)
 
+	result.metrics = make(map[string]interface{})
+
 	return &result
 }
 
@@ -41,14 +46,14 @@ func (e *Exporter) StartRoutines() {
 	ch_endpoint := make(chan *EndPoint)
 	ch_raw := make(chan *RawMetric)
 
-	for i := 0; i < e.HTTPWorkers; i++ {
+	for i := 0; i < e.httpworkers; i++ {
 		go func() {
 			for {
 				select {
 				case endpoint := <-ch_endpoint:
 					content, err_getjson := endpoint.fetchJSONData()
 					if err_getjson == nil {
-						endpoint.JSONToRawMetrics([]string{namespace}, content, ch_raw)
+						endpoint.JSONToRawMetrics([]string{e.namespace}, content, ch_raw)
 					}
 					endpoint.setStatusWait()
 				}
@@ -60,7 +65,7 @@ func (e *Exporter) StartRoutines() {
 		for {
 			select {
 			case rawmetric := <-ch_raw:
-				e.metricfactory.ProcessRawMetric(rawmetric)
+				e.metricfactory.ProcessRawMetric(rawmetric, e.metrics)
 			}
 		}
 	}()
@@ -71,8 +76,7 @@ func (e *Exporter) StartRoutines() {
 		for {
 			select {
 			case <-ticker:
-				for i := 0; i < len(e.endpoints); i++ {
-					endpoint := e.endpoints[i]
+				for _, endpoint := range e.endpoints {
 					err_status := endpoint.CheckStatus()
 					if err_status == nil {
 						endpoint.setStatusQueue()
@@ -88,11 +92,27 @@ func (e *Exporter) Collect(ch chan<- prometheus.Metric) {
 	e.mutex.Lock()
 	defer e.mutex.Unlock()
 
-	e.totalScrapes.Inc()
-	ch <- e.totalScrapes
+	for _, metric := range e.metrics {
+		switch metric.(type) {
+		case *prometheus.GaugeVec:
+			metric.(*prometheus.GaugeVec).Collect(ch)
+		case *prometheus.CounterVec:
+			metric.(*prometheus.CounterVec).Collect(ch)
+		}
+	}
 
+	e.totascrapes.Inc()
+	ch <- e.totascrapes
 }
 
 func (e *Exporter) Describe(ch chan<- *prometheus.Desc) {
-	ch <- e.totalScrapes.Desc()
+	ch <- e.totascrapes.Desc()
+	for _, metric := range e.metrics {
+		switch metric.(type) {
+		case *prometheus.GaugeVec:
+			metric.(*prometheus.GaugeVec).Describe(ch)
+		case *prometheus.CounterVec:
+			metric.(*prometheus.CounterVec).Describe(ch)
+		}
+	}
 }

@@ -1,13 +1,13 @@
 package collector
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/prometheus/client_golang/prometheus"
 )
 
 type MetricFactory struct {
-	metrics   map[string]interface{}
 	whitelist []*Rule
 	blacklist []*Rule
 	mapping   []*MappingRule
@@ -15,8 +15,6 @@ type MetricFactory struct {
 
 func NewMetricFactory(config *Config) *MetricFactory {
 	result := MetricFactory{}
-
-	result.metrics = make(map[string]interface{}, 0)
 
 	for _, rule_config := range config.Rules.WhiteList {
 		rule, err := NewRule(rule_config.Path)
@@ -43,25 +41,24 @@ func NewMetricFactory(config *Config) *MetricFactory {
 }
 
 func (mf *MetricFactory) GetMetricName(name []string) string {
-	return strings.Replace(strings.Join(name, separator), ".", "_", -1)
+	return strings.Replace(strings.Join(name, separator), ".", separator, -1)
 }
 
 func (mf *MetricFactory) FilterWhiteList(rawmetric *RawMetric) bool {
 	if len(mf.whitelist) != 0 {
 		for _, rule := range mf.whitelist {
-			if rule.Match(*rawmetric) {
+			if rule.Match(rawmetric.name) {
 				return true
 			}
 		}
-	} else {
-		return true
+		return false
 	}
-	return false
+	return true
 }
 
 func (mf *MetricFactory) FilterBlackList(rawmetric *RawMetric) bool {
 	for _, rule := range mf.blacklist {
-		if rule.Match(*rawmetric) {
+		if rule.Match(rawmetric.name) {
 			return false
 		}
 	}
@@ -71,42 +68,40 @@ func (mf *MetricFactory) FilterBlackList(rawmetric *RawMetric) bool {
 func (mf *MetricFactory) ApplyMapping(rawmetric *RawMetric) ([]string, map[string]string) {
 	name := rawmetric.name
 	labels := rawmetric.endpoint.labels
-
 	for _, rule := range mf.mapping {
-		if rule.Match(*rawmetric) {
+		if rule.Match(rawmetric.name) {
 			return rule.Apply(name, labels)
 		}
 	}
-
 	return name, labels
 }
 
-func (mf *MetricFactory) ProcessRawMetric(rawmetric *RawMetric) {
+func (mf *MetricFactory) ProcessRawMetric(rawmetric *RawMetric, metrics map[string]interface{}) {
 	if mf.FilterWhiteList(rawmetric) && mf.FilterBlackList(rawmetric) {
 
 		name, labels := mf.ApplyMapping(rawmetric)
 
-		label_keys := []string{}
-		label_values := []string{}
+		labels_k := []string{}
+		labels_v := []string{}
 		for k, v := range labels {
-			label_keys = append(label_keys, k)
-			label_values = append(label_values, v)
+			labels_k = append(labels_k, k)
+			labels_v = append(labels_v, v)
 		}
 
+		fmt.Println(labels_k)
 		metric_name := mf.GetMetricName(name)
 
-		metric, exists := mf.metrics[metric_name]
+		metric, exists := metrics[metric_name]
 		if !exists {
 			metric = prometheus.NewGaugeVec(prometheus.GaugeOpts{
-				Namespace: namespace,
+				Namespace: "",
 				Name:      metric_name,
 				Help:      "No Help provided",
 			},
-				label_keys,
+				labels_k,
 			)
-			mf.metrics[metric_name] = metric
-			prometheus.MustRegister(metric.(*prometheus.GaugeVec))
+			metrics[metric_name] = metric
 		}
-		metric.(*prometheus.GaugeVec).WithLabelValues(label_values...).Set(rawmetric.value)
+		metric.(*prometheus.GaugeVec).WithLabelValues(labels_v...).Set(rawmetric.value)
 	}
 }

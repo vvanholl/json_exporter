@@ -22,7 +22,8 @@ type ConfigMappingRule struct {
 }
 
 type Config struct {
-	HTTPWorkers int
+	HTTPWorkers int        `yaml:"httpworkers,omitempty"`
+	NameSpace string        `yaml:"namespace,omitempty"`
 	Rules       struct {
 		WhiteList []ConfigRule        `yaml:"whitelist,omitempty"`
 		BlackList []ConfigRule        `yaml:"blacklist,omitempty"`
@@ -35,6 +36,7 @@ type Config struct {
 func NewDefaultConfig() *Config {
 	return &Config{
 		HTTPWorkers: 1,
+		NameSpace: "json",
 		Common: ConfigEndPoint{
 			Interval: 10,
 			Labels:   make(map[string]string, 0),

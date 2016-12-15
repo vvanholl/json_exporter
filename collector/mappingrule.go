@@ -6,21 +6,33 @@ type MappingRule struct {
 }
 
 func NewMappingRule(path []string, labels []string) (*MappingRule, error) {
-	result := MappingRule{}
 	rule, err := NewRule(path)
 	if err != nil {
 		return nil, err
 	}
-	result.Rule = rule
-	result.labels = labels
-	return &result, nil
+
+	return &MappingRule{
+		Rule:   rule,
+		labels: labels,
+	}, nil
 }
 
-func (lr *MappingRule) Apply(name []string, labels map[string]string) ([]string, map[string]string) {
-	new_name := name[:len(lr.Rule.path)]
-	new_labels := labels
-	for i := range lr.labels {
-		new_labels[lr.labels[i]] = name[len(lr.Rule.path)+i]
+func (mr *MappingRule) Apply(old_name []string, old_labels map[string]string) ([]string, map[string]string) {
+	if len(old_name) == len(mr.path) + len(mr.labels) {
+
+		new_name := old_name[:len(mr.Rule.path)]
+		new_labels := make(map[string]string)
+
+		for k, v := range old_labels {
+			new_labels[k] = v
+		}
+
+		for i := range mr.labels {
+			new_labels[mr.labels[i]] = old_name[len(mr.Rule.path)+i]
+		}
+
+		return new_name, new_labels
+	} else {
+		return old_name, old_labels
 	}
-	return new_name, new_labels
 }

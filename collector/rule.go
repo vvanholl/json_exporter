@@ -22,9 +22,9 @@ func NewRule(path []string) (*Rule, error) {
 	return &result, nil
 }
 
-func (r *Rule) Match(rawmetric RawMetric) bool {
+func (r *Rule) Match(name []string) bool {
 	for i := range r.path_compiled {
-		if !r.path_compiled[i].MatchString(rawmetric.name[i]) {
+		if !r.path_compiled[i].MatchString(name[i]) {
 			return false
 		}
 	}
