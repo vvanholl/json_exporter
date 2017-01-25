@@ -8,51 +8,54 @@ import (
 )
 
 type Exporter struct {
-	namespace string
-	endpoints     []*EndPoint
-	httpworkers   int
-	metricfactory *MetricFactory
-	metrics       map[string]interface{}
-	totascrapes   prometheus.Counter
-	mutex         sync.RWMutex
+	namespace            string
+	num_endpoint_workers int
+	endpoints            []*EndPoint
+	metricfactory        *MetricFactory
+	metrics              map[string]interface{}
+	totalscrapes         prometheus.Counter
+	mutex                sync.RWMutex
 }
 
-func NewExporter(config *Config) *Exporter {
-	result := Exporter{}
+func NewExporter(config *Config) (*Exporter, error) {
+	var err error
 
-	result.namespace = config.NameSpace
-	result.httpworkers = config.HTTPWorkers
+	result := Exporter{
+		namespace:            config.NameSpace,
+		num_endpoint_workers: config.NumEndpointWorkers,
+		endpoints:            []*EndPoint{},
+		metrics:              make(map[string]interface{}),
+		totalscrapes: prometheus.NewCounter(prometheus.CounterOpts{
+			Namespace: config.NameSpace,
+			Name:      "exporter_totalscrapes",
+			Help:      "Current total JSON scrapes.",
+		}),
+	}
 
-	result.totascrapes = prometheus.NewCounter(prometheus.CounterOpts{
-		Namespace: result.namespace,
-		Name:      "exporter_total_scrapes",
-		Help:      "Current total JSON scrapes.",
-	})
-
-	result.endpoints = []*EndPoint{}
 	for _, endpoint_config := range config.EndPoints {
 		endpoint := NewEndPoint(endpoint_config.URI, endpoint_config.Labels, endpoint_config.Interval)
 		result.endpoints = append(result.endpoints, endpoint)
 	}
 
-	result.metricfactory = NewMetricFactory(config)
+	result.metricfactory, err = NewMetricFactory(config)
+	if err != nil {
+		return nil, err
+	}
 
-	result.metrics = make(map[string]interface{})
-
-	return &result
+	return &result, nil
 }
 
 func (e *Exporter) StartRoutines() {
 	ch_endpoint := make(chan *EndPoint)
 	ch_raw := make(chan *RawMetric)
 
-	for i := 0; i < e.httpworkers; i++ {
+	for i := 0; i < e.num_endpoint_workers; i++ {
 		go func() {
 			for {
 				select {
 				case endpoint := <-ch_endpoint:
-					content, err_getjson := endpoint.fetchJSONData()
-					if err_getjson == nil {
+					content, err := endpoint.fetchJSONData()
+					if err == nil {
 						endpoint.JSONToRawMetrics([]string{e.namespace}, content, ch_raw)
 					}
 					endpoint.setStatusWait()
@@ -77,8 +80,7 @@ func (e *Exporter) StartRoutines() {
 			select {
 			case <-ticker:
 				for _, endpoint := range e.endpoints {
-					err_status := endpoint.CheckStatus()
-					if err_status == nil {
+					if endpoint.CheckStatus() == nil {
 						endpoint.setStatusQueue()
 						ch_endpoint <- endpoint
 					}
@@ -101,12 +103,13 @@ func (e *Exporter) Collect(ch chan<- prometheus.Metric) {
 		}
 	}
 
-	e.totascrapes.Inc()
-	ch <- e.totascrapes
+	e.totalscrapes.Inc()
+	ch <- e.totalscrapes
 }
 
 func (e *Exporter) Describe(ch chan<- *prometheus.Desc) {
-	ch <- e.totascrapes.Desc()
+	ch <- e.totalscrapes.Desc()
+
 	for _, metric := range e.metrics {
 		switch metric.(type) {
 		case *prometheus.GaugeVec:

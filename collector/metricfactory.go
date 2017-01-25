@@ -1,7 +1,6 @@
 package collector
 
 import (
-	"fmt"
 	"strings"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -13,13 +12,15 @@ type MetricFactory struct {
 	mapping   []*MappingRule
 }
 
-func NewMetricFactory(config *Config) *MetricFactory {
+func NewMetricFactory(config *Config) (*MetricFactory, error) {
 	result := MetricFactory{}
 
 	for _, rule_config := range config.Rules.WhiteList {
 		rule, err := NewRule(rule_config.Path)
 		if err == nil {
 			result.whitelist = append(result.whitelist, rule)
+		} else {
+			return nil, err
 		}
 	}
 
@@ -27,6 +28,8 @@ func NewMetricFactory(config *Config) *MetricFactory {
 		rule, err := NewRule(rule_config.Path)
 		if err == nil {
 			result.blacklist = append(result.blacklist, rule)
+		} else {
+			return nil, err
 		}
 	}
 
@@ -34,20 +37,22 @@ func NewMetricFactory(config *Config) *MetricFactory {
 		rule, err := NewMappingRule(rule_config.Path, rule_config.Labels)
 		if err == nil {
 			result.mapping = append(result.mapping, rule)
+		} else {
+			return nil, err
 		}
 	}
 
-	return &result
+	return &result, nil
 }
 
 func (mf *MetricFactory) GetMetricName(name []string) string {
-	return strings.Replace(strings.Join(name, separator), ".", separator, -1)
+	return strings.Replace(strings.Join(name, "_"), ".", "_", -1)
 }
 
-func (mf *MetricFactory) FilterWhiteList(rawmetric *RawMetric) bool {
+func (mf *MetricFactory) FilterWhiteList(name []string) bool {
 	if len(mf.whitelist) != 0 {
 		for _, rule := range mf.whitelist {
-			if rule.Match(rawmetric.name) {
+			if rule.Match(name) {
 				return true
 			}
 		}
@@ -56,20 +61,18 @@ func (mf *MetricFactory) FilterWhiteList(rawmetric *RawMetric) bool {
 	return true
 }
 
-func (mf *MetricFactory) FilterBlackList(rawmetric *RawMetric) bool {
+func (mf *MetricFactory) FilterBlackList(name []string) bool {
 	for _, rule := range mf.blacklist {
-		if rule.Match(rawmetric.name) {
+		if rule.Match(name) {
 			return false
 		}
 	}
 	return true
 }
 
-func (mf *MetricFactory) ApplyMapping(rawmetric *RawMetric) ([]string, map[string]string) {
-	name := rawmetric.name
-	labels := rawmetric.endpoint.labels
+func (mf *MetricFactory) ApplyMapping(name []string, labels Labels) ([]string, Labels) {
 	for _, rule := range mf.mapping {
-		if rule.Match(rawmetric.name) {
+		if rule.Match(name) {
 			return rule.Apply(name, labels)
 		}
 	}
@@ -77,20 +80,12 @@ func (mf *MetricFactory) ApplyMapping(rawmetric *RawMetric) ([]string, map[strin
 }
 
 func (mf *MetricFactory) ProcessRawMetric(rawmetric *RawMetric, metrics map[string]interface{}) {
-	if mf.FilterWhiteList(rawmetric) && mf.FilterBlackList(rawmetric) {
+	name := rawmetric.name
+	labels := rawmetric.endpoint.labels
 
-		name, labels := mf.ApplyMapping(rawmetric)
-
-		labels_k := []string{}
-		labels_v := []string{}
-		for k, v := range labels {
-			labels_k = append(labels_k, k)
-			labels_v = append(labels_v, v)
-		}
-
-		fmt.Println(labels_k)
+	if mf.FilterWhiteList(name) && mf.FilterBlackList(name) {
+		name, labels = mf.ApplyMapping(name, labels)
 		metric_name := mf.GetMetricName(name)
-
 		metric, exists := metrics[metric_name]
 		if !exists {
 			metric = prometheus.NewGaugeVec(prometheus.GaugeOpts{
@@ -98,10 +93,10 @@ func (mf *MetricFactory) ProcessRawMetric(rawmetric *RawMetric, metrics map[stri
 				Name:      metric_name,
 				Help:      "No Help provided",
 			},
-				labels_k,
+				labels.Keys(),
 			)
 			metrics[metric_name] = metric
 		}
-		metric.(*prometheus.GaugeVec).WithLabelValues(labels_v...).Set(rawmetric.value)
+		metric.(*prometheus.GaugeVec).WithLabelValues(labels.Values()...).Set(rawmetric.value)
 	}
 }

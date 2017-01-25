@@ -16,9 +16,12 @@ import (
 
 func main() {
 	var (
+		config *collector.Config
+		exporter *collector.Exporter
 		listenAddress = flag.String("web.listen-address", ":8888", "Address to listen on for web interface and telemetry.")
 		metricsPath   = flag.String("web.telemetry-path", "/metrics", "Path under which to expose metrics.")
 		showVersion   = flag.Bool("version", false, "Print version information.")
+		err error
 	)
 	flag.Parse()
 
@@ -30,14 +33,15 @@ func main() {
 	log.Infoln("Starting json_exporter", version.Info())
 	log.Infoln("Build context", version.BuildContext())
 
-	config, err := collector.NewFileConfig("config.yml")
+	config, err = collector.NewFileConfig("config.yml")
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	fmt.Println(config)
-
-	exporter := collector.NewExporter(config)
+	exporter, err = collector.NewExporter(config)
+	if err != nil {
+		log.Fatal("Could not start exporter", err)
+	}
 
 	exporter.StartRoutines()
 

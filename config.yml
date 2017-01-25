@@ -1,5 +1,5 @@
 namespace: "front"
-httpworkers: 2
+num_endpoint_workers: 2
 
 rules:
   mapping:

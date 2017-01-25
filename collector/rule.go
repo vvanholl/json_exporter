@@ -10,21 +10,23 @@ type Rule struct {
 }
 
 func NewRule(path []string) (*Rule, error) {
-	result := Rule{}
-	result.path = path
-	for _, p := range path {
+	result := Rule{
+		path:          path,
+		path_compiled: make([]*regexp.Regexp, len(path)),
+	}
+	for i, p := range path {
 		compiled, err := regexp.Compile(p)
 		if err != nil {
 			return nil, err
 		}
-		result.path_compiled = append(result.path_compiled, compiled)
+		result.path_compiled[i] = compiled
 	}
 	return &result, nil
 }
 
 func (r *Rule) Match(name []string) bool {
-	for i := range r.path_compiled {
-		if !r.path_compiled[i].MatchString(name[i]) {
+	for i, compiled := range r.path_compiled {
+		if !compiled.MatchString(name[i]) {
 			return false
 		}
 	}

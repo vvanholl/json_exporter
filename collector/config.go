@@ -22,8 +22,8 @@ type ConfigMappingRule struct {
 }
 
 type Config struct {
-	HTTPWorkers int        `yaml:"httpworkers,omitempty"`
-	NameSpace string        `yaml:"namespace,omitempty"`
+	NumEndpointWorkers int    `yaml:"num_endpoint_workers,omitempty"`
+	NameSpace   string `yaml:"namespace,omitempty"`
 	Rules       struct {
 		WhiteList []ConfigRule        `yaml:"whitelist,omitempty"`
 		BlackList []ConfigRule        `yaml:"blacklist,omitempty"`
@@ -35,8 +35,8 @@ type Config struct {
 
 func NewDefaultConfig() *Config {
 	return &Config{
-		HTTPWorkers: 1,
-		NameSpace: "json",
+		NumEndpointWorkers: 1,
+		NameSpace:   "json",
 		Common: ConfigEndPoint{
 			Interval: 10,
 			Labels:   make(map[string]string, 0),
@@ -45,23 +45,23 @@ func NewDefaultConfig() *Config {
 }
 
 func NewFileConfig(filename string) (*Config, error) {
-	data, err_read := ioutil.ReadFile(filename)
-	if err_read != nil {
-		return nil, err_read
-	} else {
-		config := NewDefaultConfig()
-		err_yaml := yaml.Unmarshal([]byte(data), config)
-		if err_yaml == nil {
-			err_validate := config.Validate()
-			if err_validate == nil {
-				return config, nil
-			} else {
-				return nil, err_validate
-			}
-		} else {
-			return nil, err_yaml
-		}
+	data, err := ioutil.ReadFile(filename)
+	if err != nil {
+		return nil, err
 	}
+
+	config := NewDefaultConfig()
+	err = yaml.Unmarshal([]byte(data), config)
+	if err != nil {
+		return nil, err
+	}
+
+	err = config.Validate()
+	if err != nil {
+		return nil, err
+	}
+
+	return config, nil
 }
 
 func (c *Config) Validate() error {

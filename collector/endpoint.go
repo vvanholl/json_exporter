@@ -17,20 +17,23 @@ const (
 
 type EndPoint struct {
 	uri             string
-	labels          map[string]string
+	labels          Labels
 	interval        int
 	status          int
 	next_check_time time.Time
 }
 
 func NewEndPoint(uri string, labels map[string]string, interval int) *EndPoint {
-	return &EndPoint{
+	result := EndPoint{
 		uri:             uri,
-		labels:          labels,
 		interval:        interval,
 		status:          ENDPOINT_STATUS_IDLE,
 		next_check_time: time.Now(),
 	}
+	for k, v := range labels {
+		result.labels = append(result.labels, *NewLabel(k, v))
+	}
+	return &result
 }
 
 func (e *EndPoint) CheckStatus() error {
@@ -93,6 +96,7 @@ func (e *EndPoint) fetchJSONData() (interface{}, error) {
 	}
 
 	var parsed interface{}
+
 	err = json.Unmarshal(rawdata, &parsed)
 	if err != nil {
 		return nil, err
