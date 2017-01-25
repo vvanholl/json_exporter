@@ -34,7 +34,7 @@ func NewMetricFactory(config *Config) (*MetricFactory, error) {
 	}
 
 	for _, rule_config := range config.Rules.Mapping {
-		rule, err := NewMappingRule(rule_config.Path, rule_config.Labels)
+		rule, err := NewMappingRule(rule_config.Path, rule_config.Help, rule_config.Labels)
 		if err == nil {
 			result.mapping = append(result.mapping, rule)
 		} else {
@@ -70,28 +70,29 @@ func (mf *MetricFactory) FilterBlackList(name []string) bool {
 	return true
 }
 
-func (mf *MetricFactory) ApplyMapping(name []string, labels Labels) ([]string, Labels) {
+func (mf *MetricFactory) ApplyMapping(name []string, help string, labels Labels) ([]string, string, Labels) {
 	for _, rule := range mf.mapping {
 		if rule.Match(name) {
-			return rule.Apply(name, labels)
+			return rule.Apply(name, help, labels)
 		}
 	}
-	return name, labels
+	return name, help, labels
 }
 
 func (mf *MetricFactory) ProcessRawMetric(rawmetric *RawMetric, metrics map[string]interface{}) {
 	name := rawmetric.name
+	help := "No help provided"
 	labels := rawmetric.endpoint.labels
 
 	if mf.FilterWhiteList(name) && mf.FilterBlackList(name) {
-		name, labels = mf.ApplyMapping(name, labels)
+		name, help, labels = mf.ApplyMapping(name, help, labels)
 		metric_name := mf.GetMetricName(name)
 		metric, exists := metrics[metric_name]
 		if !exists {
 			metric = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 				Namespace: "",
 				Name:      metric_name,
-				Help:      "No Help provided",
+				Help:      help,
 			},
 				labels.Keys(),
 			)

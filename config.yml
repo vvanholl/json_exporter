@@ -4,6 +4,7 @@ num_endpoint_workers: 2
 rules:
   mapping:
     - path: ["front","networkAdRequest"]
+      help: "Adcalls per minute"
       labels: ["network"]
 
 common:

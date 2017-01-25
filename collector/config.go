@@ -18,13 +18,14 @@ type ConfigRule struct {
 
 type ConfigMappingRule struct {
 	Path   []string `yaml:"path,omitempty"`
+	Help   string   `yaml:"help,omitempty"`
 	Labels []string `yaml:"labels,omitempty"`
 }
 
 type Config struct {
 	NumEndpointWorkers int    `yaml:"num_endpoint_workers,omitempty"`
-	NameSpace   string `yaml:"namespace,omitempty"`
-	Rules       struct {
+	NameSpace          string `yaml:"namespace,omitempty"`
+	Rules              struct {
 		WhiteList []ConfigRule        `yaml:"whitelist,omitempty"`
 		BlackList []ConfigRule        `yaml:"blacklist,omitempty"`
 		Mapping   []ConfigMappingRule `yaml:"mapping,omitempty"`
@@ -36,7 +37,7 @@ type Config struct {
 func NewDefaultConfig() *Config {
 	return &Config{
 		NumEndpointWorkers: 1,
-		NameSpace:   "json",
+		NameSpace:          "json",
 		Common: ConfigEndPoint{
 			Interval: 10,
 			Labels:   make(map[string]string, 0),
