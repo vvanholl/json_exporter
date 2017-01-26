@@ -1,3 +1,5 @@
+# This is a sample configuration file
+
 namespace: "front"
 num_endpoint_workers: 2
 
